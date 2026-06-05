@@ -1,0 +1,19 @@
+# Environment & secrets
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# ChromaDB embeddings (too large for GitHub, regenerate with ingest.py)
+.chroma/
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.vscode/
+.idea/
