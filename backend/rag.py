@@ -3,8 +3,7 @@ import json
 import chromadb
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
@@ -17,7 +16,7 @@ load_dotenv()
 CHROMA_PATH = ".chroma"
 
 # 1. Setup Embeddings and Retriever
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+embeddings = NVIDIAEmbeddings(model="nvidia/nv-embedqa-e5-v5")
 client = chromadb.PersistentClient(path=CHROMA_PATH)
 db = Chroma(
     client=client,
@@ -27,7 +26,7 @@ db = Chroma(
 retriever = db.as_retriever(search_kwargs={"k": 15})
 
 # 2. Setup LLM
-llm = ChatGroq(model='llama-3.1-8b-instant', temperature=0)
+llm = ChatNVIDIA(model='meta/llama3-70b-instruct', temperature=0)
 
 # 3. Conversational Prompts
 contextualize_q_system_prompt = (

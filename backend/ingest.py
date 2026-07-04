@@ -1,11 +1,11 @@
 from datasets import load_dataset
 import config
 from db import sessionlocal , Job , init_db
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
  
-LIMIT = 10000
+LIMIT = 15000
 
 def load_to_postgress(limit = LIMIT):
     ds = load_dataset('lukebarousse/data_jobs', split = "train")
@@ -58,7 +58,7 @@ def load_to_chromadb(limit = LIMIT):
 
     print(f"Embedding documents{len(data)} into Chroma Db")
 
-    embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    embedding = NVIDIAEmbeddings(model="nvidia/nv-embedqa-e5-v5")
 
     documents = []
 
@@ -84,7 +84,7 @@ def load_to_chromadb(limit = LIMIT):
 
         ) )
 
-    batch_size = 500 
+    batch_size = 100 
     vectorstore = None 
 
     for i in range(0 , len(documents) , batch_size):
@@ -104,5 +104,5 @@ def load_to_chromadb(limit = LIMIT):
 
 if __name__ == "__main__":
     init_db()
-    load_to_postgress()
+    # load_to_postgress()
     load_to_chromadb()
