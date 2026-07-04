@@ -1,10 +1,11 @@
 import json
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from contextlib import asynccontextmanager
-from rag import query_rag
+from rag import query_rag, query_rag_stream
 from db import QueryHistory, sessionlocal, init_db
 
 @asynccontextmanager
@@ -32,6 +33,8 @@ app.add_middleware(
 
 class QueryRequest(BaseModel):
     question: str
+    session_id: str = "default"
+    stream: bool = False
 
 class QueryResponse(BaseModel):
     question: str
@@ -51,18 +54,32 @@ class HistoryItem(BaseModel):
 def health_check():
     return {"status": "ok"}
 
-@app.post("/query", response_model=QueryResponse)
-def query_endpoint(request: QueryRequest):
+async def stream_and_log(question: str, session_id: str):
+    full_answer = ""
+    sources = []
+    
     try:
-        result = query_rag(request.question)
-
-        # Save to query_history table
+        # We must run the generator. 
+        # Since query_rag_stream is synchronous, in a real production app we'd use run_in_threadpool.
+        # For simplicity, we just iterate it.
+        for chunk in query_rag_stream(question, session_id):
+            if chunk.startswith("\n\n__SOURCES__:"):
+                sources_json = chunk.split("__SOURCES__:")[1]
+                try:
+                    sources = json.loads(sources_json)
+                except:
+                    pass
+            else:
+                full_answer += chunk
+            yield chunk
+            
+        # Log to DB
         session = sessionlocal()
         try:
             record = QueryHistory(
-                question=result["question"],
-                answer=result["answer"],
-                sources=json.dumps(result["sources"]),
+                question=question,
+                answer=full_answer,
+                sources=json.dumps(sources),
             )
             session.add(record)
             session.commit()
@@ -70,8 +87,37 @@ def query_endpoint(request: QueryRequest):
             session.rollback()
         finally:
             session.close()
+            
+    except Exception as e:
+        yield f"Error: {str(e)}"
 
-        return result
+@app.post("/query")
+def query_endpoint(request: QueryRequest):
+    try:
+        if request.stream:
+            return StreamingResponse(
+                stream_and_log(request.question, request.session_id),
+                media_type="text/event-stream"
+            )
+        else:
+            result = query_rag(request.question, request.session_id)
+
+            # Save to query_history table
+            session = sessionlocal()
+            try:
+                record = QueryHistory(
+                    question=result["question"],
+                    answer=result["answer"],
+                    sources=json.dumps(result["sources"]),
+                )
+                session.add(record)
+                session.commit()
+            except Exception:
+                session.rollback()
+            finally:
+                session.close()
+
+            return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -101,4 +147,4 @@ def get_history():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

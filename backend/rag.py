@@ -1,62 +1,83 @@
 import os
+import json
 import chromadb
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_classic.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 
 load_dotenv()
 
 CHROMA_PATH = ".chroma"
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
-PROMPT_TEMPLATE = """
-You are an expert analyst on the Indian job market. Use ONLY the context below to answer the question.
-If the context doesn't contain enough information, say "I don't have enough data to answer that."
+# 1. Setup Embeddings and Retriever
+embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+client = chromadb.PersistentClient(path=CHROMA_PATH)
+db = Chroma(
+    client=client,
+    collection_name="langchain",
+    embedding_function=embeddings,
+)
+retriever = db.as_retriever(search_kwargs={"k": 15})
 
-Context:
-{context}
+# 2. Setup LLM
+llm = ChatGroq(model='llama-3.1-8b-instant', temperature=0)
 
-Question: {question}
+# 3. Conversational Prompts
+contextualize_q_system_prompt = (
+    "Given a chat history and the latest user question "
+    "which might reference context in the chat history, "
+    "formulate a standalone question which can be understood "
+    "without the chat history. Do NOT answer the question, "
+    "just reformulate it if needed and otherwise return it as is."
+)
+contextualize_q_prompt = ChatPromptTemplate.from_messages([
+    ("system", contextualize_q_system_prompt),
+    MessagesPlaceholder("chat_history"),
+    ("human", "{input}"),
+])
 
-Answer:"""
+system_prompt = (
+    "You are an expert analyst on the Indian job market. "
+    "Use ONLY the context below to answer the question. "
+    "If the context doesn't contain enough information, say 'I don't have enough data to answer that.'\n\n"
+    "Context:\n{context}"
+)
+qa_prompt = ChatPromptTemplate.from_messages([
+    ("system", system_prompt),
+    MessagesPlaceholder("chat_history"),
+    ("human", "{input}"),
+])
 
+# 4. Memory Store
+store = {}
 
+def get_session_history(session_id: str) -> BaseChatMessageHistory:
+    if session_id not in store:
+        store[session_id] = ChatMessageHistory()
+    return store[session_id]
 
-def get_retriever(k: int = 5):
-    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
-
+def get_conversational_rag_chain():
+    history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
+    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
     
-    client = chromadb.PersistentClient(path=CHROMA_PATH)
-
-   
-    db = Chroma(
-        client=client,
-        collection_name="langchain",
-        embedding_function=embeddings,
+    conversational_rag_chain = RunnableWithMessageHistory(
+        rag_chain,
+        get_session_history,
+        input_messages_key="input",
+        history_messages_key="chat_history",
+        output_messages_key="answer",
     )
-    return db.as_retriever(search_kwargs={"k": k})
+    return conversational_rag_chain
 
-def format_docs(docs):
-    return "\n\n---\n\n".join(doc.page_content for doc in docs)
-
-
-def query_rag(question:str) -> dict:
-    retriever = get_retriever(k=3)
-
-
-    docs = retriever.invoke(question)
-    context = format_docs(docs)
-
-    prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
-    llm = ChatGroq(model = 'llama-3.1-8b-instant', temperature = 0)
-
-    chain = prompt | llm | StrOutputParser()
-
-    answer = chain.invoke({"context": context, "question": question})
-
+def extract_sources(docs):
     sources = []
     for doc in docs:
         meta = doc.metadata
@@ -68,27 +89,28 @@ def query_rag(question:str) -> dict:
             if location:
                 label += f" ({location})"
             sources.append(label)
-    sources = list(set(sources)) if sources else ["Data Jobs Dataset"]
+    return list(set(sources)) if sources else ["Data Jobs Dataset"]
 
+def query_rag_stream(question: str, session_id: str = "default"):
+    chain = get_conversational_rag_chain()
+    docs = []
+    
+    for chunk in chain.stream({"input": question}, config={"configurable": {"session_id": session_id}}):
+        if "context" in chunk:
+            docs = chunk["context"]
+        if "answer" in chunk:
+            text_chunk = chunk["answer"]
+            yield text_chunk
+            
+    sources = extract_sources(docs)
+    yield f"\n\n__SOURCES__:{json.dumps(sources)}"
+
+def query_rag(question: str, session_id: str = "default") -> dict:
+    chain = get_conversational_rag_chain()
+    result = chain.invoke({"input": question}, config={"configurable": {"session_id": session_id}})
+    
     return {
         "question": question,
-        "answer": answer,
-        "sources": sources
+        "answer": result["answer"],
+        "sources": extract_sources(result.get("context", []))
     }
-
-if __name__ == "__main__":
-    test_questions = [
-        "What are the top skills required for data science jobs in India?",
-        "Which cities have the most ML job openings?",
-        "What is the average salary for a Python developer in India?",
-    ]
-
-    for q in test_questions:
-        print(f"\n{'='*60}")
-        print(f"Q: {q}")
-        result = query_rag(q)
-        print(f"A: {result['answer']}")
-        print(f"Sources: {result['sources']}")
-
-
-

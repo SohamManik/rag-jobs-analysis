@@ -1,7 +1,7 @@
 from datasets import load_dataset
 import config
 from db import sessionlocal , Job , init_db
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
  
@@ -11,7 +11,12 @@ def load_to_postgress(limit = LIMIT):
     ds = load_dataset('lukebarousse/data_jobs', split = "train")
     session = sessionlocal()
 
-    data = list(ds)[:limit] if limit else list(ds)
+    data = []
+    for row in ds:
+        if row.get("job_country") == "India":
+            data.append(row)
+            if limit and len(data) >= limit:
+                break
 
     print(f"Loading the dataset of {len(data)} Length into POSTGRE SQl")
 
@@ -44,11 +49,16 @@ def load_to_postgress(limit = LIMIT):
 def load_to_chromadb(limit = LIMIT):
     ds = load_dataset("lukebarousse/data_jobs" , split = "train")
 
-    data = list(ds)[:limit] if limit else limit(ds) 
+    data = []
+    for row in ds:
+        if row.get("job_country") == "India":
+            data.append(row)
+            if limit and len(data) >= limit:
+                break
 
     print(f"Embedding documents{len(data)} into Chroma Db")
 
-    embedding = HuggingFaceEmbeddings(model_name = "all-MiniLM-L6-v2")
+    embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
     documents = []
 

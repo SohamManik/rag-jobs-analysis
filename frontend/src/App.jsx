@@ -1,9 +1,13 @@
-// App.jsx
 import { useState, useEffect, useRef } from "react"
 import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import "./App.css"
 
 const API_URL = "http://localhost:8000"
+
+function generateSessionId() {
+  return "session-" + Math.random().toString(36).substring(2, 10);
+}
 
 function App() {
   const [question, setQuestion]       = useState("")
@@ -14,6 +18,9 @@ function App() {
   const [showSidebar, setShowSidebar] = useState(true)
   const [activeId, setActiveId]       = useState(null)
   const [elapsed, setElapsed]         = useState(0)
+  
+  const [sessionId] = useState(() => generateSessionId())
+
   const timerRef = useRef(null)
 
   // Fetch history on mount
@@ -37,7 +44,7 @@ function App() {
   async function handleAsk() {
     if (!question.trim()) return
     setLoading(true)
-    setResult(null)
+    setResult({ question, answer: "", sources: [] })
     setError(null)
     setActiveId(null)
     setElapsed(0)
@@ -51,7 +58,11 @@ function App() {
       const res = await fetch(`${API_URL}/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ 
+          question,
+          session_id: sessionId,
+          stream: true
+        }),
       })
 
       if (!res.ok) {
@@ -59,17 +70,47 @@ function App() {
         throw new Error(err.detail || "Something went wrong")
       }
 
-      const data = await res.json()
-      setResult(data)
-      // Refresh history after a successful query
-      fetchHistory()
-    } catch (err) {
-      setError(err.message)
-    } finally {
+      setLoading(false) // Data is streaming now, stop generic loading indicator
       clearInterval(timerRef.current)
       timerRef.current = null
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let fullAnswer = ""
+      let finalSources = []
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        
+        const chunk = decoder.decode(value, { stream: true })
+        if (chunk.includes("__SOURCES__:")) {
+          const parts = chunk.split("__SOURCES__:")
+          fullAnswer += parts[0]
+          try {
+            finalSources = JSON.parse(parts[1])
+          } catch(e) {}
+        } else {
+          fullAnswer += chunk
+        }
+
+        setResult(prev => ({
+          ...prev,
+          answer: fullAnswer,
+          sources: finalSources
+        }))
+      }
+
+      // Refresh history after a successful query stream finishes
+      fetchHistory()
+      setQuestion("") // Clear input for next question
+
+    } catch (err) {
+      setError(err.message)
       setLoading(false)
-    }
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    } 
   }
 
   // Press Enter to submit (Shift+Enter for newline)
@@ -188,7 +229,7 @@ function App() {
             />
             <div className="search-actions">
               <button className="btn" onClick={handleAsk} disabled={loading}>
-                {loading ? "Thinking…" : "Ask"}
+                {loading ? "Connecting…" : "Ask"}
               </button>
             </div>
           </div>
@@ -202,10 +243,10 @@ function App() {
               <div className="loading-info">
                 <span className="loading-text">
                   {elapsed < 10
-                    ? "Analyzing job market data\u2026"
+                    ? "Searching vector database\u2026"
                     : elapsed < 30
-                    ? "Searching through 10,000 listings\u2026"
-                    : "Almost there \u2014 generating answer\u2026"}
+                    ? "Retrieving context\u2026"
+                    : "Connecting to AI model\u2026"}
                 </span>
                 <span className="loading-timer">{elapsed}s</span>
               </div>
@@ -229,9 +270,16 @@ function App() {
                 <div className="result-label">
                   <span className="result-label-icon">💡</span> Answer
                 </div>
-                <ReactMarkdown className="answer-text">
-                  {result.answer}
-                </ReactMarkdown>
+                <div className="answer-wrapper">
+                  {!result.answer && !loading && <span className="blinking-cursor">|</span>}
+                  {result.answer && (
+                    <div className="answer-text">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {result.answer}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {result.sources.length > 0 && result.sources[0] !== "unknown" && (

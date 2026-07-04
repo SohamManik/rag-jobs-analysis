@@ -1,171 +1,59 @@
-# 🇮🇳 Indian Job Market RAG
+# Indian Job Market RAG 🚀
 
-A full-stack **Retrieval-Augmented Generation** system that answers natural language questions about the Indian job market — powered by 10,000+ real job listings.
+An AI-powered Retrieval-Augmented Generation (RAG) full-stack application designed to analyze the Indian Data Job Market. This platform allows users to query thousands of job postings to instantly discover top skills, salary trends, and hiring companies using natural language.
 
-Ask questions like:
-- *"What are the top skills for data science jobs in India?"*
-- *"Which cities have the most ML job openings?"*
-- *"What is the average salary for a Python developer?"*
+Built to bridge the gap between job seekers and the actual demands of the industry.
 
-The system retrieves the most relevant job listings from a vector database, feeds them as context to an LLM, and generates a grounded, data-backed answer.
+## 🛠️ Tech Stack
 
----
+- **Frontend:** React + Vite, customized with a modern, glassmorphic UI.
+- **Backend:** FastAPI (Python), serving asynchronous Server-Sent Events (SSE) for real-time AI streaming.
+- **AI/LLM:** Groq (Llama 3.1 8B Instant) via LangChain for lightning-fast inference.
+- **Vector Database:** ChromaDB with local HuggingFace Embeddings (`all-MiniLM-L6-v2`) for zero-cost, high-speed semantic search.
+- **Relational Database:** PostgreSQL (Supabase) to store historical job data.
 
-## Tech Stack
+## ✨ Features
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **LLM** | Groq API (Llama 3.1 8B) | Answer generation |
-| **Embeddings** | all-MiniLM-L6-v2 | Sentence embeddings (runs locally) |
-| **Vector DB** | ChromaDB | Semantic search over job listings |
-| **Backend** | FastAPI + LangChain | RAG pipeline & REST API |
-| **Database** | PostgreSQL (Supabase) | Job data + query history |
-| **Frontend** | React + Vite | Interactive chat UI |
+- **Real-Time Streaming:** Responses stream token-by-token directly to the UI, providing a ChatGPT-like experience.
+- **Conversational Memory:** The AI remembers your session history, allowing for natural follow-up questions.
+- **Markdown Tables:** AI responses that include comparative data (e.g., salaries across cities) are automatically formatted into beautiful CSS-styled tables.
+- **100% Free Hosting Architecture:** Designed to be deployed entirely on free tiers (Render + Vercel + Supabase).
 
----
+## 🚀 Local Development
 
-## How RAG Works
-
-```
-User Question
-     │
-     ▼
-┌─────────────────┐
-│  Embed Question  │  ← all-MiniLM-L6-v2 converts text to 384-dim vector
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│  Vector Search   │  ← ChromaDB finds top 3 most similar job listings
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│  Build Prompt    │  ← Attach retrieved listings as context
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│  LLM Generation  │  ← Groq/Llama 3.1 generates a grounded answer
-└────────┬────────┘
-         ▼
-   Final Answer
-```
-
----
-
-## Screenshots
-
-<!-- Add your screenshots here after running the app -->
-<!-- ![Screenshot](screenshots/demo.png) -->
-
----
-
-## Project Structure
-
-```
-rag-job-market/
-├── backend/
-│   ├── config.py       # Environment variable loader
-│   ├── db.py           # SQLAlchemy models (Job + QueryHistory)
-│   ├── ingest.py       # One-time: loads dataset → PostgreSQL + ChromaDB
-│   ├── rag.py          # Core RAG pipeline (retrieve + generate)
-│   └── main.py         # FastAPI server with /query and /history endpoints
-├── frontend/
-│   └── src/
-│       ├── App.jsx     # React UI with history sidebar
-│       └── App.css     # Premium dark theme with glassmorphism
-├── .env                # API keys (not committed)
-└── .gitignore
-```
-
----
-
-## Setup & Installation
-
-### Prerequisites
-- Python 3.10+
-- Node.js 18+
-- [Groq API key](https://console.groq.com/) (free)
-- [Supabase](https://supabase.com/) PostgreSQL database (free tier)
-
-### 1. Clone & configure
-
-```bash
-git clone https://github.com/YOUR_USERNAME/rag-job-market.git
-cd rag-job-market
-```
-
-Create a `.env` file in the project root:
-```env
-GROQ_API_KEY=your_groq_api_key_here
-DATABASE_URL=postgresql://user:password@host:port/dbname
-```
-
-### 2. Backend setup
-
+### 1. Backend Setup
 ```bash
 cd backend
 python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # macOS/Linux
-
-pip install fastapi uvicorn langchain langchain-groq langchain-chroma langchain-huggingface chromadb python-dotenv sqlalchemy psycopg2-binary datasets sentence-transformers
+.\venv\Scripts\Activate.ps1   # (Windows)
+pip install -r requirements.txt
 ```
 
-### 3. Ingest data (one-time)
-
-```bash
-python ingest.py
+Set up your `.env` file in the `backend` folder:
+```env
+GROQ_API_KEY=your_groq_api_key
+DATABASE_URL=your_supabase_postgres_url
 ```
-This downloads the dataset, loads it into PostgreSQL, and creates ChromaDB embeddings. Takes ~10-15 minutes on first run.
 
-### 4. Start the backend
-
+Run the FastAPI server:
 ```bash
 python main.py
 ```
-API runs at `http://localhost:8000` — docs at `http://localhost:8000/docs`
 
-### 5. Frontend setup
-
+### 2. Frontend Setup
 ```bash
-cd ../frontend
+cd frontend
 npm install
 npm run dev
 ```
-Opens at `http://localhost:5173`
+
+The frontend will be available at `http://localhost:5173`.
+
+## 🌐 Deployment Strategy
+
+This project is architected to be deployed easily for free:
+- **Frontend:** Deploy the `/frontend` folder to [Vercel](https://vercel.com/). Vercel will automatically detect the Vite framework and build it.
+- **Backend:** Deploy the `/backend` folder to [Render](https://render.com/) as a Web Service. Since the Chroma vector database is checked into the repository, Render can read it as static files during runtime!
 
 ---
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check |
-| `POST` | `/query` | Ask a question → returns AI-generated answer |
-| `GET` | `/history` | Get last 50 queries with timestamps |
-
-### Example request
-```bash
-curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What are the top skills for data science jobs?"}'
-```
-
----
-
-## Dataset
-
-Uses the [Data Jobs](https://huggingface.co/datasets/lukebarousse/data_jobs) dataset by Luke Barousse — 10,000+ job listings with titles, companies, locations, salaries, and required skills.
-
----
-
-## Built By
-
-**Soham Manik** — BCA student, aspiring AI/ML Engineer
-- Built with Python, React, and AI-assisted development tools
-- Part of an ongoing journey into applied AI and RAG systems
-
----
-
-## License
-
-MIT
+*Built by Soham Manik for the Indian Job Market.*
