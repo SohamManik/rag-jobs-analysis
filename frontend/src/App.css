@@ -373,6 +373,36 @@ body::before {
 }
 
 /* ═══════════════════════════════════════════
+   SUGGESTION CHIPS
+   ═══════════════════════════════════════════ */
+.suggestion-chips {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.suggestion-chips button {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 8px 16px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.suggestion-chips button:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+  transform: translateY(-1px);
+}
+
+/* ═══════════════════════════════════════════
    LOADING STATE
    ═══════════════════════════════════════════ */
 
@@ -557,12 +587,21 @@ body::before {
 }
 
 .source-tag {
-  background: var(--bg-elevated);
-  padding: 3px 10px;
+  background: var(--bg-surface);
+  padding: 4px 12px;
   border-radius: 20px;
-  font-size: 0.72rem;
-  color: var(--text-secondary);
+  font-size: 0.75rem;
+  color: var(--accent);
   border: 1px solid var(--border);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  transition: all var(--transition);
+  cursor: default;
+}
+
+.source-tag:hover {
+  border-color: var(--accent-light);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.05);
 }
 
 /* ═══════════════════════════════════════════

@@ -1,7 +1,10 @@
 import json
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel
 from typing import List, Optional
 from contextlib import asynccontextmanager
@@ -21,6 +24,10 @@ app = FastAPI(
     description="Ask questions about Indian job market data",
     lifespan=lifespan,
 )
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -92,15 +99,16 @@ async def stream_and_log(question: str, session_id: str):
         yield f"Error: {str(e)}"
 
 @app.post("/query")
-def query_endpoint(request: QueryRequest):
+@limiter.limit("5/minute")
+def query_endpoint(request: Request, body: QueryRequest):
     try:
-        if request.stream:
+        if body.stream:
             return StreamingResponse(
-                stream_and_log(request.question, request.session_id),
+                stream_and_log(body.question, body.session_id),
                 media_type="text/event-stream"
             )
         else:
-            result = query_rag(request.question, request.session_id)
+            result = query_rag(body.question, body.session_id)
 
             # Save to query_history table
             session = sessionlocal()

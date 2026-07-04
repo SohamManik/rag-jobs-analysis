@@ -22,6 +22,14 @@ function App() {
   const [sessionId] = useState(() => generateSessionId())
 
   const timerRef = useRef(null)
+  const messagesEndRef = useRef(null)
+
+  // Auto-scroll when answer updates
+  useEffect(() => {
+    if (result && result.answer) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    }
+  }, [result?.answer])
 
   // Fetch history on mount
   useEffect(() => {
@@ -41,10 +49,14 @@ function App() {
   }
 
   // Ask a new question
-  async function handleAsk() {
-    if (!question.trim()) return
+  async function handleAsk(queryOverride = null) {
+    // If it's an event (like onClick), queryOverride might be the event object. Check if it's a string.
+    const q = typeof queryOverride === 'string' ? queryOverride : question
+    if (!q.trim()) return
+    
+    setQuestion(q)
     setLoading(true)
-    setResult({ question, answer: "", sources: [] })
+    setResult({ question: q, answer: "", sources: [] })
     setError(null)
     setActiveId(null)
     setElapsed(0)
@@ -59,7 +71,7 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          question,
+          question: q,
           session_id: sessionId,
           stream: true
         }),
@@ -119,6 +131,10 @@ function App() {
       e.preventDefault()
       handleAsk()
     }
+  }
+
+  function handleSuggestionClick(text) {
+    handleAsk(text)
   }
 
   // Click a history item to view it
@@ -234,6 +250,15 @@ function App() {
             </div>
           </div>
 
+          {/* Suggestion Chips */}
+          {!result && !loading && (
+            <div className="suggestion-chips">
+              <button onClick={() => handleSuggestionClick("What are the top skills for Data Scientists?")}>Top Skills</button>
+              <button onClick={() => handleSuggestionClick("What is the average salary in Bangalore?")}>Salaries in Bangalore</button>
+              <button onClick={() => handleSuggestionClick("Which companies are hiring for remote jobs?")}>Remote Companies</button>
+            </div>
+          )}
+
           {/* Loading indicator */}
           {loading && (
             <div className="loading-container">
@@ -290,6 +315,8 @@ function App() {
                   ))}
                 </div>
               )}
+              {/* Invisible element to scroll to */}
+              <div ref={messagesEndRef} />
             </div>
           )}
 
