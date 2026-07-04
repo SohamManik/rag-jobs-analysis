@@ -26,7 +26,7 @@ db = Chroma(
 retriever = db.as_retriever(search_kwargs={"k": 15})
 
 # 2. Setup LLM
-llm = ChatNVIDIA(model='meta/llama3-70b-instruct', temperature=0)
+llm = ChatNVIDIA(model='meta/llama-3.1-70b-instruct', temperature=0)
 
 # 3. Conversational Prompts
 contextualize_q_system_prompt = (
