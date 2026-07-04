@@ -45,7 +45,8 @@ contextualize_q_prompt = ChatPromptTemplate.from_messages([
 system_prompt = (
     "You are an expert analyst on the Indian job market. "
     "Use ONLY the context below to answer the question. "
-    "If the context doesn't contain enough information, say 'I don't have enough data to answer that.'\n"
+    "If asked for an average, trend, or aggregate statistic, calculate it based on the provided sample context and state that it is an estimate based on retrieved data. "
+    "If the context is completely unrelated to the question, say 'I don't have enough data to answer that.'\n"
     "When stating facts or statistics, you MUST include inline citations in the format [1], [2], etc., mapping to the provided context documents.\n\n"
     "Context:\n{context}"
 )
